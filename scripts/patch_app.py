@@ -21,12 +21,15 @@ with open(path) as f:
 
 # Determine include path style (App/ vs app/ vs just the filename)
 src_dir = os.path.dirname(path)  # e.g. firmware/app
-rel     = os.path.relpath(src_dir, "firmware")  # e.g. app  or  App
+rel     = os.path.relpath(src_dir, "firmware")  # e.g. App/app
+# For #include in app.c: app.c uses -I firmware/App/ so only the last
+# path component is needed (e.g. "app/messenger.h")
+rel_inc = os.path.basename(src_dir)  # e.g. "app" or "App"
 changes = 0
 
 # 1. Includes -- use the relative dir we found
-msg_inc = f'#include "{rel}/messenger.h"'
-scr_inc = f'#include "{rel}/scrambler.h"'
+msg_inc = f'#include "{rel_inc}/messenger.h"'
+scr_inc = f'#include "{rel_inc}/scrambler.h"'
 set_inc_pattern = re.compile(
     r'(#include\s+"' + re.escape(rel) + r'/settings\.h"'
     r'|#include\s+"settings\.h")',
@@ -34,8 +37,8 @@ set_inc_pattern = re.compile(
 )
 
 if "messenger.h" not in src:
-    new_inc = (f'\n#ifdef ENABLE_MESSENGER\n#include "{rel}/messenger.h"\n#endif\n'
-               f'#ifdef ENABLE_SCRAMBLER\n#include "{rel}/scrambler.h"\n#endif')
+    new_inc = (f'\n#ifdef ENABLE_MESSENGER\n#include "{rel_inc}/messenger.h"\n#endif\n'
+               f'#ifdef ENABLE_SCRAMBLER\n#include "{rel_inc}/scrambler.h"\n#endif')
     src, n = set_inc_pattern.subn(r'\1' + new_inc, src, count=1)
     if n:
         changes += 1
@@ -54,7 +57,7 @@ if "MESSENGER_Init" not in src:
                 anchor
                 + "\n#ifdef ENABLE_MESSENGER\n    MESSENGER_Init();\n#endif"
                 + "\n#ifdef ENABLE_SCRAMBLER\n"
-                  "    SCRAMBLER_Init((ScramblerMode_t)g_eeprom.Settings.ScramblerMode);\n"
+                  "    SCRAMBLER_Init((ScramblerMode_t)gEeprom.ScramblerMode);\n"
                   "#endif",
                 1)
             changes += 1
@@ -95,7 +98,7 @@ if "SCRAMBLER_Enable" not in src:
             src = src.replace(anchor,
                 anchor
                 + "\n#ifdef ENABLE_SCRAMBLER\n"
-                  "    if (g_eeprom.Settings.ScramblerMode != 0) SCRAMBLER_Enable();\n"
+                  "    if (gEeprom.ScramblerMode != 0) SCRAMBLER_Enable();\n"
                   "#endif",
                 1)
             changes += 1
