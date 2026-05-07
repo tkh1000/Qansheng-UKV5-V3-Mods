@@ -15,6 +15,11 @@ set(CMAKE_OBJCOPY      ${TOOLCHAIN_PREFIX}objcopy)
 set(CMAKE_OBJDUMP      ${TOOLCHAIN_PREFIX}objdump)
 set(CMAKE_SIZE         ${TOOLCHAIN_PREFIX}size)
 
+# Add .elf suffix so objcopy post-build commands can find the output file
+set(CMAKE_EXECUTABLE_SUFFIX_ASM ".elf")
+set(CMAKE_EXECUTABLE_SUFFIX_C   ".elf")
+set(CMAKE_EXECUTABLE_SUFFIX_CXX ".elf")
+
 # Without this, CMake tries to link a test executable against libc/startup
 # which doesn't exist for a bare-metal target — this skips that check.
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
