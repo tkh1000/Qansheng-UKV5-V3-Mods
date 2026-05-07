@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """patch_cmake.py -- Append Messenger/Scrambler options to Fusion's CMakeLists.txt.
 
-Fusion defines its executable as add_executable(${EXE_NAME} ...) where EXE_NAME
-is set earlier in the file. We detect EXE_NAME and the source/helper dir prefixes
-from the existing CMakeLists content so the patch is always consistent.
+Source and helper directory prefixes are derived from the probe step's
+FW_SRC_DIR / FW_HELPER_DIR env vars so they always match where files
+were actually copied, rather than guessing from CMakeLists content.
 """
 import re, sys, os
 
@@ -16,33 +16,54 @@ if "ENABLE_MESSENGER" in src:
     print("CMakeLists.txt already patched -- skipping")
     sys.exit(0)
 
-# ---- Detect the executable variable / target name --------------------------
-# Fusion uses: set(EXE_NAME firmware) then add_executable(${EXE_NAME} ...)
-# The correct way to reference it in our appended code is ${EXE_NAME}.
-
-# Check if the CMakeLists uses a variable for the exe name
-exe_var_match = re.search(r'set\s*\(\s*(\w+)\s+\w+\s*\)', src)
-add_exe_match  = re.search(r'add_executable\(\s*(\$\{)?(\w+)\}?\s', src)
-
-if add_exe_match:
-    if add_exe_match.group(1):  # it's a ${VAR} reference
-        target_ref = "${" + add_exe_match.group(2) + "}"
-    else:
-        target_ref = add_exe_match.group(2)  # literal name like f4hwn
+# ---- Target name -----------------------------------------------------------
+# Fusion uses add_executable(${EXE_NAME} ...) where EXE_NAME is a cache var.
+# We write ${EXE_NAME} so it resolves correctly at configure time.
+m = re.search(r'add_executable\(\s*(\$\{)?(\w+)\}?', src)
+if m and m.group(1):                      # found ${VAR} form
+    target_ref = "${" + m.group(2) + "}"
+elif m:                                   # found literal name
+    target_ref = m.group(2)
 else:
-    # Fallback: use ${EXE_NAME} which is Fusion's known variable
-    target_ref = "${EXE_NAME}"
+    target_ref = "${EXE_NAME}"            # Fusion's known variable
+print(f"Target reference: '{target_ref}'")
 
-print(f"Using target reference: '{target_ref}'")
+# ---- Source and helper prefixes --------------------------------------------
+# Prefer the probe-detected paths (set by probe_structure.py via GITHUB_ENV).
+# Fall back to scanning CMakeLists content if not available.
 
-# ---- Detect source and helper directory prefixes ---------------------------
-# Read the CMakeLists to see what case it uses for source paths
-src_prefix    = "app"   if "app/"    in src else "App"
-helper_prefix = "Helper" if "Helper/" in src else ("helper" if "helper/" in src else "Helper")
+fw_src_dir = os.environ.get("FW_SRC_DIR", "")         # e.g. firmware/app
+fw_helper_dir = os.environ.get("FW_HELPER_DIR", "")   # e.g. firmware/Helper
 
-print(f"Source prefix: '{src_prefix}/'  Helper prefix: '{helper_prefix}/'")
+if fw_src_dir:
+    # Make relative to firmware/ — that's what CMakeLists.txt paths need
+    src_prefix = os.path.relpath(fw_src_dir, "firmware")
+    print(f"Source prefix from FW_SRC_DIR: '{src_prefix}'")
+else:
+    # Scan CMakeLists for existing source references
+    if re.search(r'\bapp/', src):
+        src_prefix = "app"
+    elif re.search(r'\bApp/', src):
+        src_prefix = "App"
+    else:
+        src_prefix = "app"
+    print(f"Source prefix from scan: '{src_prefix}'")
 
-# ---- Build the addition ----------------------------------------------------
+if fw_helper_dir:
+    helper_prefix = os.path.relpath(fw_helper_dir, "firmware")
+    print(f"Helper prefix from FW_HELPER_DIR: '{helper_prefix}'")
+else:
+    if "Helper/" in src:
+        helper_prefix = "Helper"
+    elif "helper/" in src:
+        helper_prefix = "helper"
+    else:
+        helper_prefix = "Helper"
+    print(f"Helper prefix from scan: '{helper_prefix}'")
+
+print(f"src='{src_prefix}/'  helper='{helper_prefix}/'")
+
+# ---- Append the patch ------------------------------------------------------
 addition = (
     "\n"
     "# ---- Messenger port additions ----------------------------------------\n"
@@ -78,7 +99,7 @@ addition = (
 with open(path, "a") as f:
     f.write(addition)
 
-print(f"CMakeLists.txt patched (target='{target_ref}')")
+print(f"CMakeLists.txt patched OK")
 with open(path) as f:
     lines = f.readlines()
 print("Last 25 lines:")
