@@ -73,6 +73,9 @@ addition = (
     'option(ENABLE_SCRAMBLER          "Voice frequency-inversion scrambler" OFF)\n'
     "\n"
     "if(ENABLE_MESSENGER)\n"
+    f"    target_include_directories({target_ref} PRIVATE\n"
+    f"        ${{CMAKE_SOURCE_DIR}}/{helper_prefix}\n"
+    "    )\n"
     f"    target_compile_definitions({target_ref} PRIVATE ENABLE_MESSENGER=1)\n"
     f"    target_sources({target_ref} PRIVATE\n"
     f"        {src_prefix}/messenger.c\n"
