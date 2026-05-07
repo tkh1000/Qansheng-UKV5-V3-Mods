@@ -77,19 +77,12 @@ jobs:
       - name: Copy port source files into Fusion tree
         run: |
           set -euo pipefail
+          # FW_SRC_DIR and FW_HELPER_DIR set by probe_structure.py
           SRC="${FW_SRC_DIR}"
+          HELPER="${FW_HELPER_DIR}"
           echo "Source dir: $SRC"
-          PARENT=$(dirname "$SRC")
-
-          HELPER=""
-          for d in "$PARENT/Helper" "$PARENT/helper" "$SRC/Helper" "$SRC/helper"; do
-            if [ -d "$d" ]; then HELPER="$d"; break; fi
-          done
-          if [ -z "$HELPER" ]; then
-            HELPER="$PARENT/Helper"
-            mkdir -p "$HELPER"
-          fi
           echo "Helper dir: $HELPER"
+          mkdir -p "$HELPER"
 
           cp port/Helper/fsk.h      "$HELPER/"
           cp port/Helper/fsk.c      "$HELPER/"
