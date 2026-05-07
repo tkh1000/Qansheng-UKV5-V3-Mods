@@ -56,7 +56,7 @@ def wrap_adc(m):
     stmt, var = m.group(1), m.group(2)
     return (stmt
         + f"\n#ifdef ENABLE_SCRAMBLER\n"
-          f"    if (g_eeprom.Settings.ScramblerMode != 0) {{\n"
+          f"    if (gEeprom.ScramblerMode != 0) {{\n"
           f"        int16_t _s = SCRAMBLER_ProcessSample({var});\n"
           f"        {var} = (uint16_t)(_s + 2048);\n"
           f"    }}\n"
@@ -73,7 +73,7 @@ if "SCRAMBLER_Enable" not in src:
             idx = src.find(sq); eol = src.find("\n", idx)
             src = (src[:eol]
                 + "\n#ifdef ENABLE_SCRAMBLER\n"
-                  "    if (g_eeprom.Settings.ScramblerMode != 0) SCRAMBLER_Enable();\n"
+                  "    if (gEeprom.ScramblerMode != 0) SCRAMBLER_Enable();\n"
                   "#endif"
                 + src[eol:])
             changes += 1; break
