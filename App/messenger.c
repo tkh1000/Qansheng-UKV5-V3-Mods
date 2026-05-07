@@ -6,7 +6,7 @@
  *  - BK4819 SPI: identical chip, use Fusion's BK4819_WriteRegister / ReadRegister
  *  - UI/display: identical ST7565 LCD, same Fusion draw primitives
  *  - Keyboard: same key constants (KEY_0..KEY_9, KEY_STAR, KEY_F, KEY_MENU, KEY_EXIT)
- *  - Settings: read from Fusion's g_eeprom.Settings struct (extended in settings.h)
+ *  - Settings: read from Fusion's gEeprom.Settings struct (extended in settings.h)
  *  - No direct MCU register access in this file.
  */
 
@@ -20,10 +20,11 @@
 
 /* Fusion headers — adjust paths if Fusion's include layout differs */
 #include "App/bk4819.h"          /* BK4819_WriteRegister, BK4819_ReadRegister  */
-#include "App/settings.h"        /* g_eeprom, t_Settings                       */
+#include "App/settings.h"        /* gEeprom, EEPROM_Config_t                   */
+#include "radio.h"                 /* gTxVfo, VFO_Info_t                         */
 #include "App/keyboard.h"        /* KEY_* constants                            */
 #include "App/uart.h"            /* UART_printf (debug, optional)              */
-#include "UI/ui.h"               /* UI_PrintStringXY, UI_DisplayClear, etc.    */
+#include "ui/helper.h"           /* UI_DisplayClear, UI_PrintStringSmallNormal  */
 #include "driver/st7565.h"       /* ST7565_BlitFullScreen                      */
 
 #include <string.h>
@@ -71,15 +72,15 @@ static uint8_t  s_last_digit_idx  = 0;
 
 static bool IsWideChannel(void)
 {
-    /* Fusion stores bandwidth in g_eeprom.VfoInfo[].bwMode or similar.
+    /* Fusion stores bandwidth in gEeprom.VfoInfo[].bwMode or similar.
      * Adjust the field name to match Fusion's actual settings struct. */
-    return (g_eeprom.VfoInfo[g_eeprom.TX_VFO].CHANNEL_BANDWIDTH == 0);
+    return (gTxVfo->CHANNEL_BANDWIDTH == 0);
     /* 0 = wide (25 kHz), 1 = narrow (12.5 kHz) in Fusion */
 }
 
 static FskModulation_t GetModulation(void)
 {
-    return (FskModulation_t)g_eeprom.Settings.MsgModulation;
+    return (FskModulation_t)gEeprom.MsgModulation;
 }
 
 static void PushHistory(const char *text, MsgDir_t dir)
@@ -101,7 +102,7 @@ void MESSENGER_Init(void)
 {
     memset(&g_Messenger, 0, sizeof(g_Messenger));
 
-    if (g_eeprom.Settings.MsgRx) {
+    if (gEeprom.MsgRx) {
         MESSENGER_BK4819_SetupRX(GetModulation(), IsWideChannel());
     }
 }
@@ -235,8 +236,8 @@ void MESSENGER_Transmit(void)
     memcpy(payload, g_Messenger.input, payload_len);
 
 #ifdef ENABLE_ENCRYPTION
-    if (g_eeprom.Settings.MsgEnc) {
-        CRYPTO_Encrypt(payload, payload_len, g_eeprom.Settings.EncKey);
+    if (gEeprom.MsgEnc) {
+        CRYPTO_Encrypt(payload, payload_len, gEeprom.EncKey);
     }
 #endif
 
@@ -253,7 +254,7 @@ void MESSENGER_Transmit(void)
     MESSENGER_BK4819_DisableFSK();
 
     /* Re-enable RX if setting is on */
-    if (g_eeprom.Settings.MsgRx)
+    if (gEeprom.MsgRx)
         MESSENGER_BK4819_SetupRX(GetModulation(), IsWideChannel());
 
     /* Save to history */
@@ -275,7 +276,7 @@ void MESSENGER_Transmit(void)
 
 void MESSENGER_TimeSlice10ms(void)
 {
-    if (!g_eeprom.Settings.MsgRx) return;
+    if (!gEeprom.MsgRx) return;
     if (g_Messenger.tx_in_progress) return;
 
     /* Poll interrupt register */
@@ -318,8 +319,8 @@ void MESSENGER_TimeSlice10ms(void)
     memcpy(payload, g_Messenger.rx_packet.payload, payload_len);
 
 #ifdef ENABLE_ENCRYPTION
-    if (g_eeprom.Settings.MsgEnc) {
-        CRYPTO_Decrypt(payload, payload_len, g_eeprom.Settings.EncKey);
+    if (gEeprom.MsgEnc) {
+        CRYPTO_Decrypt(payload, payload_len, gEeprom.EncKey);
     }
 #endif
 
@@ -332,7 +333,7 @@ void MESSENGER_TimeSlice10ms(void)
     g_Messenger.pending_rx = true;
 
     /* Auto-ACK */
-    if (g_eeprom.Settings.MsgAck) {
+    if (gEeprom.MsgAck) {
         const char *ack = "ACK";
         uint8_t ack_buf[3];
         memcpy(ack_buf, ack, 3);
@@ -367,7 +368,7 @@ void MESSENGER_DrawScreen(void)
     snprintf(header, sizeof(header), "MSG [%s]%s",
              KB_MODE_LABEL[g_Messenger.kb_mode],
              g_Messenger.tx_in_progress ? " TX" : "   ");
-    UI_PrintStringXY(header, 0, 0);
+    UI_PrintStringSmallNormal(header, 0, 127, 0);
 
     /* --- History (rows 1 to MSG_DISPLAY_ROWS-1) --- */
     /* Show the most recent (MSG_DISPLAY_ROWS-1) messages */
@@ -385,14 +386,14 @@ void MESSENGER_DrawScreen(void)
         /* Show > for TX, < for RX */
         char prefix = (g_Messenger.history[idx].dir == MSG_DIR_TX) ? '>' : '<';
         snprintf(line, sizeof(line), "%c%s", prefix, g_Messenger.history[idx].text);
-        UI_PrintStringXY(line, 0, row + 1);
+        UI_PrintStringSmallNormal(line, 0, 127, row + 1);
     }
 
     /* --- Input row (last row) --- */
     char input_line[MSG_DISPLAY_COLS + 2];
     snprintf(input_line, sizeof(input_line), ">%s_", g_Messenger.input);
     input_line[MSG_DISPLAY_COLS] = '\0';
-    UI_PrintStringXY(input_line, 0, MSG_DISPLAY_ROWS);
+    UI_PrintStringSmallNormal(input_line, 0, 127, MSG_DISPLAY_ROWS);
 
     /* Push to LCD */
     ST7565_BlitFullScreen();
@@ -416,7 +417,7 @@ void MESSENGER_DrawStatusIcon(void)
      * This places the icon at the far right of the top status bar row.
      * Use UI_DrawBitmap or equivalent from Fusion's ui.h.          */
     /* Placeholder: draw a simple 'E' if bitmap API isn't available */
-    UI_PrintStringXY("M", 120, 0);   /* 'M' for message — replace with bitmap */
+    UI_PrintStringSmallNormal("M", 120, 127, 0);   /* 'M' for message — replace with bitmap */
 }
 
 #endif /* ENABLE_MESSENGER */
