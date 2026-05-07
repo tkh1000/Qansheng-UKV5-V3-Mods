@@ -93,14 +93,36 @@ jobs:
           cp port/App/bk4819_fsk.c  "$SRC/"
           cp port/App/scrambler.h   "$SRC/"
 
-          # Fix include paths in our ported files to match the actual
-          # helper directory name on disk (may be 'helper' not 'Helper').
+          # Fix include paths in our ported files.
+          # The Fusion compiler root is firmware/App/ so headers there need
+          # no prefix. Explicitly replace every known bad include.
           HELPER_NAME=$(basename "$HELPER")
           echo "Helper basename: $HELPER_NAME"
           for f in "$SRC/messenger.h" "$SRC/messenger.c" "$SRC/bk4819_fsk.c" "$SRC/scrambler.h"; do
+            [ -f "$f" ] || continue
             sed -i "s|\"Helper/|\"${HELPER_NAME}/|g" "$f"
             sed -i "s|<Helper/|<${HELPER_NAME}/|g" "$f"
+            sed -i 's|"App/bk4819\.h"|"bk4819.h"|g'    "$f"
+            sed -i 's|"App/settings\.h"|"settings.h"|g' "$f"
+            sed -i 's|"App/keyboard\.h"|"keyboard.h"|g' "$f"
+            sed -i 's|"App/uart\.h"|"uart.h"|g'         "$f"
+            sed -i 's|"App/ui\.h"|"ui.h"|g'             "$f"
+            sed -i 's|"App/app\.h"|"app.h"|g'           "$f"
+            sed -i 's|"App/action\.h"|"action.h"|g'     "$f"
+            sed -i 's|"App/menu\.h"|"menu.h"|g'         "$f"
+            sed -i 's|"App/audio\.h"|"audio.h"|g'       "$f"
+            sed -i 's|"App/messenger\.h"|"messenger.h"|g' "$f"
+            sed -i 's|"App/scrambler\.h"|"scrambler.h"|g' "$f"
+            sed -i 's|"App/bk4819_fsk\.h"|"bk4819_fsk.h"|g' "$f"
+            sed -i 's|"UI/ui\.h"|"ui/ui.h"|g'           "$f"
+            sed -i 's|"UI/status\.h"|"ui/status.h"|g'   "$f"
+            sed -i 's|"driver/st7565\.h"|"st7565.h"|g'  "$f"
+            sed -i 's|"driver/keyboard\.h"|"keyboard.h"|g' "$f"
+            sed -i 's|"driver/bk4819\.h"|"bk4819.h"|g'  "$f"
           done
+          echo "Include paths fixed."
+          echo "Resulting includes in messenger.c:"
+          grep "#include" "$SRC/messenger.c" || true
 
           echo "Port files in place:"
           find "$SRC" "$HELPER" \( -name "*.h" -o -name "*.c" \) \
