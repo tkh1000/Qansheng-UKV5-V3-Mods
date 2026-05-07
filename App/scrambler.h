@@ -56,7 +56,6 @@ int16_t SCRAMBLER_ProcessSample(uint16_t raw_adc);
 #ifdef SCRAMBLER_IMPL
 #ifdef ENABLE_SCRAMBLER
 
-#include "scrambler.h"
 #include <math.h>    /* sinf — link with -lm or replace with LUT below */
 #include <string.h>
 
