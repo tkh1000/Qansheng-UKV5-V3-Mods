@@ -93,6 +93,15 @@ jobs:
           cp port/App/bk4819_fsk.c  "$SRC/"
           cp port/App/scrambler.h   "$SRC/"
 
+          # Fix include paths in our ported files to match the actual
+          # helper directory name on disk (may be 'helper' not 'Helper').
+          HELPER_NAME=$(basename "$HELPER")
+          echo "Helper basename: $HELPER_NAME"
+          for f in "$SRC/messenger.h" "$SRC/messenger.c" "$SRC/bk4819_fsk.c" "$SRC/scrambler.h"; do
+            sed -i "s|\"Helper/|\"${HELPER_NAME}/|g" "$f"
+            sed -i "s|<Helper/|<${HELPER_NAME}/|g" "$f"
+          done
+
           echo "Port files in place:"
           find "$SRC" "$HELPER" \( -name "*.h" -o -name "*.c" \) \
             | grep -E "fsk|crypto|messenger|scrambler|bk4819_fsk" | sort
