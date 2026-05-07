@@ -21,7 +21,7 @@ concurrency:
 
 env:
   FUSION_REPO: armel/uv-k1-k5v3-firmware-custom
-  ARM_GCC_VERSION: "12.3.rel1"
+  ARM_GCC_VERSION: "12.3.Rel1"
   FLASH_MAX_BYTES: "120832"
 
 jobs:
