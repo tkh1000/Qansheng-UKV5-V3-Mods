@@ -119,15 +119,22 @@ jobs:
       - name: Verify scrambler hooks
         run: python3 port/scripts/verify_hooks.py
 
-      - name: CMake configure
+      # Use the upstream Fusion preset as the base so the linker script,
+      # source lists, and add_executable(f4hwn) are all set up correctly.
+      # We supply our own toolchain file because the preset's toolchain path
+      # points inside a Docker container that doesn't exist on the runner.
+      # CMAKE_CROSSCOMPILING=TRUE is required: without it Fusion's CMake
+      # skips add_executable(f4hwn) inside if(CMAKE_CROSSCOMPILING).
+      - name: CMake configure (Fusion preset + ARM toolchain)
         working-directory: firmware
         run: |
           set -euo pipefail
-          TC_FLAG=""
-          for f in cmake/arm-none-eabi.cmake cmake/toolchain.cmake cmake/toolchain-arm-none-eabi.cmake; do
-            if [ -f "$f" ]; then TC_FLAG="-DCMAKE_TOOLCHAIN_FILE=$f"; echo "Toolchain: $f"; break; fi
-          done
-          cmake -S . -B ${{ matrix.build_dir }} -G Ninja $TC_FLAG \
+          echo "arm-none-eabi-gcc: $(which arm-none-eabi-gcc)"
+          arm-none-eabi-gcc --version | head -1
+
+          cmake --preset Fusion \
+            -B ${{ matrix.build_dir }} \
+            -DCMAKE_TOOLCHAIN_FILE=../port/cmake/arm-none-eabi-toolchain.cmake \
             -DENABLE_MESSENGER=ON \
             -DENABLE_MESSENGER_FSK_MUTE=ON \
             -DENABLE_ENCRYPTION=ON \
@@ -144,8 +151,8 @@ jobs:
           find ${{ matrix.build_dir }} -type f | sort
           echo "=== ELF files ==="
           find ${{ matrix.build_dir }} -name "*.elf" | sort
-          echo "=== BIN files ==="
-          find ${{ matrix.build_dir }} -name "*.bin" | sort || true
+          echo "=== BIN / HEX files ==="
+          find ${{ matrix.build_dir }} \( -name "*.bin" -o -name "*.hex" \) | sort || true
 
       - name: Generate .bin via objcopy
         working-directory: firmware
